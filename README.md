@@ -112,7 +112,7 @@ When executed, the program prints:
 This makes it useful for understanding how a real assembler assigns memory and resolves labels during code generation.
 
 ## Files work together
-
+```structure
 main.py
    │
    ├── reads input.asm
@@ -142,12 +142,12 @@ pass1.py
                     │
                     ↓
                 Object Code
+```
 
-
-               ## Working procedure
+## Working procedure
 
 ## Pass 1 algorithm works
-
+```Pass 1 algorithm working procedure
 START
   ↓
 Read first line
@@ -220,9 +220,9 @@ Is END?
   └── NO → Read next line
   ↓
 STOP
-
+```
 ## TWO-PASS ASSEMBLER
-
+```Pass2 algorithm working 
 SOURCE PROGRAM
        │
        ▼
@@ -249,3 +249,4 @@ SOURCE PROGRAM
                      │
                      ▼
               OBJECT PROGRAM
+```
