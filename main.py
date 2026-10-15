@@ -8,7 +8,8 @@ from pass1 import (
 
 from pass2 import (
     pass2,
-    display_object_code
+    display_object_code,
+    display_object_program
 )
 
 
@@ -116,6 +117,17 @@ def main():
 
         display_object_code(
             object_codes
+        )
+
+        # ==================================================
+        # OBJECT PROGRAM (HTE RECORDS)
+        # ==================================================
+
+        display_object_program(
+            intermediate,
+            object_codes,
+            start_address,
+            program_length
         )
 
         # ==================================================

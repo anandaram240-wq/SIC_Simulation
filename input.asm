@@ -1,12 +1,23 @@
-DATA    START   5000
-
-        LDA     NUM
-        STA     RESULT
+COUNT   START   9000
+        LDX     ZERO
+        LDA     ZERO
+        STA     COUNT1
+LOOP    LDA     TABLE
+        COMP    ZERO
+        JLT     NEXT
+        LDA     COUNT1
+        ADD     ONE
+        STA     COUNT1
+NEXT    TIX     FIVE
+        JLT     LOOP
         RSUB
-
-NUM     WORD    100
-CHAR    BYTE    C'HELLO'
-HEXVAL  BYTE    X'F1'
-RESULT  RESW    1
-
-        END     DATA
+TABLE   WORD    10
+        WORD    -5
+        WORD    20
+        WORD    -2
+        WORD    15
+COUNT1  RESW    1
+ZERO    WORD    0
+ONE     WORD    1
+FIVE    WORD    5
+        END     COUNT

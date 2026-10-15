@@ -1,0 +1,661 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Two-Pass SIC Assembler Simulator</title>
+  <script src="https://www.gstatic.com/antigravity/web/dev/tailwindcss.min.js"></script>
+  <style>
+    .font-mono-code {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+    }
+  </style>
+</head>
+<body class="bg-[var(--background)] text-[var(--foreground)] antialiased p-4 md:p-6 min-h-screen">
+
+  <div class="max-w-6xl mx-auto space-y-6">
+    <!-- Header -->
+    <header class="bg-[var(--card)] border border-[var(--border)] rounded-2xl p-6 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
+      <div>
+        <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-semibold bg-blue-500/10 text-blue-500 border border-blue-500/20 mb-2">
+          SSCD (23CS701) Activity - I • VII Sem A
+        </div>
+        <h1 class="text-2xl md:text-3xl font-bold tracking-tight text-[var(--foreground)]">
+          Two-Pass SIC Assembler Simulator
+        </h1>
+        <p class="text-sm text-[var(--muted-foreground)] mt-1">
+          Simulation of Memory Address Assignment (Pass 1), Symbol Resolution & Object Code Generation (Pass 2), and HTE Record Generation.
+        </p>
+      </div>
+
+      <div class="flex flex-wrap items-center gap-2">
+        <button id="btnRunAll" onclick="runFullAssembly()" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-xl text-sm transition shadow-sm flex items-center gap-2">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+          Run Complete Simulation
+        </button>
+        <button id="btnStepPass1" onclick="stepPass1()" class="px-3 py-2 bg-[var(--card)] hover:bg-[var(--border)] border border-[var(--border)] text-sm font-medium rounded-xl transition flex items-center gap-1.5">
+          Step Pass 1
+        </button>
+        <button id="btnStepPass2" onclick="stepPass2()" class="px-3 py-2 bg-[var(--card)] hover:bg-[var(--border)] border border-[var(--border)] text-sm font-medium rounded-xl transition flex items-center gap-1.5">
+          Step Pass 2
+        </button>
+        <button onclick="resetSimulation()" class="px-3 py-2 text-rose-500 hover:bg-rose-500/10 border border-rose-500/20 text-sm font-medium rounded-xl transition">
+          Reset
+        </button>
+      </div>
+    </header>
+
+    <!-- Status & Metrics -->
+    <div class="grid grid-cols-2 sm:grid-cols-4 gap-4">
+      <div class="bg-[var(--card)] border border-[var(--border)] rounded-xl p-4 shadow-sm">
+        <div class="text-xs text-[var(--muted-foreground)]">Starting Address</div>
+        <div id="metricStartAddr" class="text-xl font-bold font-mono-code text-[var(--foreground)] mt-1">9000 H</div>
+      </div>
+      <div class="bg-[var(--card)] border border-[var(--border)] rounded-xl p-4 shadow-sm">
+        <div class="text-xs text-[var(--muted-foreground)]">Current LOCCTR</div>
+        <div id="metricLocctr" class="text-xl font-bold font-mono-code text-blue-500 mt-1">9000 H</div>
+      </div>
+      <div class="bg-[var(--card)] border border-[var(--border)] rounded-xl p-4 shadow-sm">
+        <div class="text-xs text-[var(--muted-foreground)]">Program Length</div>
+        <div id="metricProgLen" class="text-xl font-bold font-mono-code text-emerald-500 mt-1">003F H (63 B)</div>
+      </div>
+      <div class="bg-[var(--card)] border border-[var(--border)] rounded-xl p-4 shadow-sm">
+        <div class="text-xs text-[var(--muted-foreground)]">Pass Status</div>
+        <div id="metricStatus" class="text-sm font-bold text-amber-500 mt-1.5 flex items-center gap-1.5">
+          <span class="w-2 h-2 rounded-full bg-amber-500 inline-block animate-pulse"></span> Ready
+        </div>
+      </div>
+    </div>
+
+    <!-- Main Grid -->
+    <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+      <!-- Left Column: Source Code Editor & Controls (5 Cols) -->
+      <div class="lg:col-span-5 space-y-4">
+        <div class="bg-[var(--card)] border border-[var(--border)] rounded-xl p-4 shadow-sm">
+          <div class="flex items-center justify-between mb-2">
+            <h2 class="text-sm font-semibold text-[var(--foreground)] flex items-center gap-2">
+              <svg class="w-4 h-4 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"/></svg>
+              Allotted Assembly Program (input.asm)
+            </h2>
+            <span class="text-xs px-2 py-0.5 rounded bg-[var(--border)] text-[var(--muted-foreground)]">23 Lines</span>
+          </div>
+          <textarea id="srcEditor" rows="18" class="w-full bg-[var(--background)] border border-[var(--border)] rounded-lg p-3 text-xs font-mono-code leading-relaxed text-[var(--foreground)] focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none">COUNT   START   9000
+        LDX     ZERO
+        LDA     ZERO
+        STA     COUNT1
+LOOP    LDA     TABLE
+        COMP    ZERO
+        JLT     NEXT
+        LDA     COUNT1
+        ADD     ONE
+        STA     COUNT1
+NEXT    TIX     FIVE
+        JLT     LOOP
+        RSUB
+TABLE   WORD    10
+        WORD    -5
+        WORD    20
+        WORD    -2
+        WORD    15
+COUNT1  RESW    1
+ZERO    WORD    0
+ONE     WORD    1
+FIVE    WORD    5
+        END     COUNT</textarea>
+          <div class="mt-2 text-xs text-[var(--muted-foreground)] flex items-center justify-between">
+            <span>Notice negative constants: <code class="text-blue-500">-5</code>, <code class="text-blue-500">-2</code></span>
+            <button onclick="loadSampleProgram()" class="text-blue-500 hover:underline">Reload Allotted</button>
+          </div>
+        </div>
+
+        <!-- Symbol Table (SYMTAB) Card -->
+        <div class="bg-[var(--card)] border border-[var(--border)] rounded-xl p-4 shadow-sm">
+          <h2 class="text-sm font-semibold text-[var(--foreground)] mb-3 flex items-center gap-2">
+            <svg class="w-4 h-4 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M3 14h18m-9-4v8m-7 0h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"/></svg>
+            Symbol Table (SYMTAB)
+          </h2>
+          <div class="overflow-x-auto">
+            <table class="w-full text-left text-xs">
+              <thead class="border-b border-[var(--border)] text-[var(--muted-foreground)]">
+                <tr>
+                  <th class="pb-2">Symbol</th>
+                  <th class="pb-2">Address (Hex)</th>
+                  <th class="pb-2">Address (Dec)</th>
+                </tr>
+              </thead>
+              <tbody id="symtabBody" class="font-mono-code divide-y divide-[var(--border)]">
+                <tr><td colspan="3" class="py-3 text-center text-[var(--muted-foreground)]">Run Pass 1 to build SYMTAB</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- Right Column: Tabs (Intermediate, Object Code, HTE Records, Two's Comp) (7 Cols) -->
+      <div class="lg:col-span-7 space-y-4">
+        <!-- Tab Navigation -->
+        <div class="flex border-b border-[var(--border)] gap-2 text-xs font-medium">
+          <button onclick="switchTab('tabIntermediate')" id="btnTabIntermediate" class="py-2 px-3 border-b-2 border-blue-500 text-blue-500 font-semibold transition">
+            Pass 1 & Intermediate
+          </button>
+          <button onclick="switchTab('tabObjectCode')" id="btnTabObjectCode" class="py-2 px-3 border-b-2 border-transparent text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition">
+            Pass 2 Object Code
+          </button>
+          <button onclick="switchTab('tabHTE')" id="btnTabHTE" class="py-2 px-3 border-b-2 border-transparent text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition">
+            HTE Object Program
+          </button>
+          <button onclick="switchTab('tabTwosComp')" id="btnTabTwosComp" class="py-2 px-3 border-b-2 border-transparent text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition">
+            2's Complement Math
+          </button>
+        </div>
+
+        <!-- Tab 1: Intermediate Code Table -->
+        <div id="tabIntermediate" class="bg-[var(--card)] border border-[var(--border)] rounded-xl p-4 shadow-sm overflow-hidden">
+          <div class="flex items-center justify-between mb-3">
+            <h3 class="text-sm font-semibold text-[var(--foreground)]">Pass 1: LOCCTR & Intermediate Code</h3>
+            <span id="pass1Progress" class="text-xs text-[var(--muted-foreground)] font-mono-code">Pending</span>
+          </div>
+          <div class="overflow-y-auto max-h-[480px]">
+            <table class="w-full text-left text-xs font-mono-code">
+              <thead class="sticky top-0 bg-[var(--card)] border-b border-[var(--border)] text-[var(--muted-foreground)]">
+                <tr>
+                  <th class="py-2">Loc</th>
+                  <th class="py-2">Label</th>
+                  <th class="py-2">Opcode</th>
+                  <th class="py-2">Operand</th>
+                  <th class="py-2">LOCCTR Next</th>
+                </tr>
+              </thead>
+              <tbody id="intermediateBody" class="divide-y divide-[var(--border)]">
+                <tr><td colspan="5" class="py-6 text-center text-[var(--muted-foreground)]">Click "Step Pass 1" or "Run Complete Simulation"</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Tab 2: Pass 2 Object Code Table -->
+        <div id="tabObjectCode" class="hidden bg-[var(--card)] border border-[var(--border)] rounded-xl p-4 shadow-sm overflow-hidden">
+          <div class="flex items-center justify-between mb-3">
+            <h3 class="text-sm font-semibold text-[var(--foreground)]">Pass 2: Machine Code Resolution</h3>
+            <span id="pass2Progress" class="text-xs text-[var(--muted-foreground)] font-mono-code">Pending</span>
+          </div>
+          <div class="overflow-y-auto max-h-[480px]">
+            <table class="w-full text-left text-xs font-mono-code">
+              <thead class="sticky top-0 bg-[var(--card)] border-b border-[var(--border)] text-[var(--muted-foreground)]">
+                <tr>
+                  <th class="py-2">Address</th>
+                  <th class="py-2">Source Statement</th>
+                  <th class="py-2">Machine Opcode</th>
+                  <th class="py-2">Target Address</th>
+                  <th class="py-2 font-bold text-blue-500">Object Code</th>
+                </tr>
+              </thead>
+              <tbody id="objectCodeBody" class="divide-y divide-[var(--border)]">
+                <tr><td colspan="5" class="py-6 text-center text-[var(--muted-foreground)]">Pass 2 requires Pass 1 to finish.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Tab 3: HTE Object Program -->
+        <div id="tabHTE" class="hidden bg-[var(--card)] border border-[var(--border)] rounded-xl p-4 shadow-sm space-y-4">
+          <div class="flex items-center justify-between">
+            <h3 class="text-sm font-semibold text-[var(--foreground)]">Generated SIC Object Program (HTE Format)</h3>
+            <button onclick="copyHTE()" class="text-xs px-2.5 py-1 bg-[var(--border)] hover:bg-blue-600 hover:text-white rounded transition">Copy Records</button>
+          </div>
+          
+          <div class="bg-[var(--background)] border border-[var(--border)] rounded-xl p-4 font-mono-code text-xs space-y-3 leading-relaxed">
+            <div>
+              <span class="text-blue-500 font-bold block mb-1">// Header Record (H ^ Name ^ StartAddr ^ Length)</span>
+              <div id="hteHeader" class="text-blue-400 select-all font-semibold">H^COUNT ^009000^00003F</div>
+            </div>
+            <div>
+              <span class="text-emerald-500 font-bold block mb-1">// Text Records (T ^ StartAddr ^ ByteLen ^ ObjectCodes)</span>
+              <div id="hteText" class="space-y-1 select-all text-emerald-400">
+                <div>T^009000^1E^0490360090360C903300902428903638901B0090331890390C90332C903C</div>
+                <div>T^00901E^15^3890094C000000000AFFFFFB000014FFFFFE00000F</div>
+                <div>T^009036^09^000000000001000005</div>
+              </div>
+            </div>
+            <div>
+              <span class="text-amber-500 font-bold block mb-1">// End Record (E ^ ExecutionStartAddr)</span>
+              <div id="hteEnd" class="text-amber-400 select-all font-semibold">E^009000</div>
+            </div>
+          </div>
+
+          <div class="p-3 rounded-lg bg-blue-500/10 border border-blue-500/20 text-xs text-[var(--foreground)] space-y-1">
+            <div class="font-semibold text-blue-500">Record Architecture Notes:</div>
+            <div>• <strong>Record 1:</strong> Contains instructions from <code class="font-mono-code">9000</code> to <code class="font-mono-code">901B</code> (10 words = 30 bytes = <code class="font-mono-code">1E</code> hex, the standard SIC max limit).</div>
+            <div>• <strong>Record 2:</strong> Contains <code class="font-mono-code">JLT</code>, <code class="font-mono-code">RSUB</code>, and 5 <code class="font-mono-code">TABLE</code> words (<code class="font-mono-code">15</code> hex bytes). Breaks at <code class="font-mono-code">COUNT1 RESW 1</code> because storage reservations generate no object code!</div>
+            <div>• <strong>Record 3:</strong> Resumes after <code class="font-mono-code">COUNT1</code> for constants <code class="font-mono-code">ZERO</code>, <code class="font-mono-code">ONE</code>, and <code class="font-mono-code">FIVE</code> (9 bytes = <code class="font-mono-code">09</code> hex).</div>
+          </div>
+        </div>
+
+        <!-- Tab 4: Two's Complement Math Explanation -->
+        <div id="tabTwosComp" class="hidden bg-[var(--card)] border border-[var(--border)] rounded-xl p-4 shadow-sm space-y-4">
+          <h3 class="text-sm font-semibold text-[var(--foreground)]">24-Bit Two's Complement Integer Representation in SIC</h3>
+          <p class="text-xs text-[var(--muted-foreground)] leading-relaxed">
+            In the Simplified Instructional Computer (SIC), all standard integer words are exactly 24 bits (3 bytes = 6 hexadecimal digits). Negative values are represented using 2's complement arithmetic (<code class="font-mono-code">2^24 - |val|</code>).
+          </p>
+
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs font-mono-code">
+            <!-- -5 -->
+            <div class="bg-[var(--background)] border border-[var(--border)] rounded-xl p-3.5 space-y-2">
+              <div class="text-amber-500 font-bold border-b border-[var(--border)] pb-1">WORD -5 Calculation</div>
+              <div class="text-[var(--muted-foreground)]">1. Magnitude (+5):</div>
+              <div class="text-[var(--foreground)]">00000000 00000000 00000101</div>
+              <div class="text-[var(--muted-foreground)]">2. 1's Complement:</div>
+              <div class="text-[var(--foreground)]">11111111 11111111 11111010</div>
+              <div class="text-[var(--muted-foreground)]">3. Add 1 (2's Complement):</div>
+              <div class="text-[var(--foreground)]">11111111 11111111 11111011</div>
+              <div class="text-[var(--muted-foreground)]">4. In Hexadecimal (24-bit):</div>
+              <div class="text-emerald-500 font-bold text-sm bg-emerald-500/10 px-2 py-1 rounded inline-block">FFFFFB</div>
+            </div>
+
+            <!-- -2 -->
+            <div class="bg-[var(--background)] border border-[var(--border)] rounded-xl p-3.5 space-y-2">
+              <div class="text-amber-500 font-bold border-b border-[var(--border)] pb-1">WORD -2 Calculation</div>
+              <div class="text-[var(--muted-foreground)]">1. Magnitude (+2):</div>
+              <div class="text-[var(--foreground)]">00000000 00000000 00000010</div>
+              <div class="text-[var(--muted-foreground)]">2. 1's Complement:</div>
+              <div class="text-[var(--foreground)]">11111111 11111111 11111101</div>
+              <div class="text-[var(--muted-foreground)]">3. Add 1 (2's Complement):</div>
+              <div class="text-[var(--foreground)]">11111111 11111111 11111110</div>
+              <div class="text-[var(--muted-foreground)]">4. In Hexadecimal (24-bit):</div>
+              <div class="text-emerald-500 font-bold text-sm bg-emerald-500/10 px-2 py-1 rounded inline-block">FFFFFE</div>
+            </div>
+          </div>
+
+          <div class="p-3 bg-amber-500/10 border border-amber-500/20 rounded-lg text-xs text-[var(--foreground)]">
+            <span class="font-bold text-amber-500">Important Implementation Note:</span> Python's standard string formatting <code class="font-mono-code">format(-5, '06X')</code> yields <code class="font-mono-code">-00005</code>, which produces invalid 7-character strings with a minus sign. The enhanced simulator performs <code class="font-mono-code">format(val & 0xFFFFFF, '06X')</code> to properly generate 24-bit SIC machine words.
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const OPTAB = {
+      "LDA": "00", "LDX": "04", "LDL": "08",
+      "STA": "0C", "STX": "10", "STL": "14",
+      "ADD": "18", "SUB": "1C", "MUL": "20", "DIV": "24",
+      "COMP": "28", "TIX": "2C",
+      "JEQ": "30", "JGT": "34", "JLT": "38", "J": "3C",
+      "JSUB": "48", "RSUB": "4C",
+      "TD": "E0", "RD": "D8", "WD": "DC"
+    };
+
+    let sourceLines = [];
+    let parsedLines = [];
+    let symtab = {};
+    let intermediate = [];
+    let objectCodes = [];
+    let startAddress = 0x9000;
+    let locctr = 0x9000;
+    let programLength = 0;
+    let p1Index = 0;
+    let p2Index = 0;
+    let p1Done = false;
+    let p2Done = false;
+
+    function parseLine(line) {
+      line = line.trim();
+      if (!line || line.startsWith(".")) return null;
+      const parts = line.split(/\s+/);
+      if (parts.length >= 3) {
+        return { label: parts[0], opcode: parts[1].toUpperCase(), operand: parts.slice(2).join(" "), source: line };
+      } else if (parts.length === 2) {
+        return { label: "", opcode: parts[0].toUpperCase(), operand: parts[1], source: line };
+      } else if (parts.length === 1) {
+        return { label: "", opcode: parts[0].toUpperCase(), operand: "", source: line };
+      }
+      return null;
+    }
+
+    function initSource() {
+      const text = document.getElementById("srcEditor").value;
+      const raw = text.split("\n");
+      parsedLines = [];
+      for (const line of raw) {
+        const p = parseLine(line);
+        if (p) parsedLines.push(p);
+      }
+      symtab = {};
+      intermediate = [];
+      objectCodes = [];
+      p1Index = 0;
+      p2Index = 0;
+      p1Done = false;
+      p2Done = false;
+    }
+
+    function stepPass1() {
+      if (parsedLines.length === 0 || p1Index === 0) {
+        initSource();
+      }
+      if (p1Done) {
+        alert("Pass 1 is already complete! Proceed with Pass 2.");
+        return;
+      }
+
+      const item = parsedLines[p1Index];
+      if (p1Index === 0) {
+        if (item.opcode === "START") {
+          startAddress = parseInt(item.operand, 16);
+          locctr = startAddress;
+          intermediate.push({ address: locctr, label: item.label, opcode: item.opcode, operand: item.operand, source: item.source, nextLocctr: locctr });
+          document.getElementById("metricStartAddr").innerText = locctr.toString(16).toUpperCase().padStart(4, "0") + " H";
+          p1Index++;
+          updatePass1UI();
+          return;
+        } else {
+          locctr = 0x9000;
+          startAddress = 0x9000;
+        }
+      }
+
+      const currentAddr = locctr;
+      if (item.label && !symtab[item.label]) {
+        symtab[item.label] = currentAddr;
+      }
+
+      if (OPTAB[item.opcode]) {
+        locctr += 3;
+      } else if (item.opcode === "WORD") {
+        locctr += 3;
+      } else if (item.opcode === "RESW") {
+        locctr += 3 * parseInt(item.operand);
+      } else if (item.opcode === "RESB") {
+        locctr += parseInt(item.operand);
+      } else if (item.opcode === "BYTE") {
+        locctr += item.operand.startsWith("C'") ? item.operand.length - 3 : Math.floor((item.operand.length - 3) / 2);
+      } else if (item.opcode === "END") {
+        p1Done = true;
+        programLength = locctr - startAddress;
+        intermediate.push({ address: currentAddr, label: item.label, opcode: item.opcode, operand: item.operand, source: item.source, nextLocctr: currentAddr });
+        updatePass1UI();
+        finishPass1();
+        return;
+      }
+
+      intermediate.push({ address: currentAddr, label: item.label, opcode: item.opcode, operand: item.operand, source: item.source, nextLocctr: locctr });
+      p1Index++;
+      if (p1Index >= parsedLines.length) {
+        p1Done = true;
+        programLength = locctr - startAddress;
+        finishPass1();
+      }
+      updatePass1UI();
+    }
+
+    function finishPass1() {
+      document.getElementById("metricLocctr").innerText = locctr.toString(16).toUpperCase().padStart(4, "0") + " H";
+      document.getElementById("metricProgLen").innerText = programLength.toString(16).toUpperCase().padStart(4, "0") + ` H (${programLength} B)`;
+      document.getElementById("metricStatus").innerHTML = `<span class="w-2 h-2 rounded-full bg-blue-500 inline-block"></span> Pass 1 Complete`;
+      document.getElementById("metricStatus").className = "text-sm font-bold text-blue-500 mt-1.5 flex items-center gap-1.5";
+      renderSymtab();
+    }
+
+    function updatePass1UI() {
+      document.getElementById("metricLocctr").innerText = locctr.toString(16).toUpperCase().padStart(4, "0") + " H";
+      document.getElementById("pass1Progress").innerText = `Statement ${p1Index} / ${parsedLines.length}`;
+      
+      const tbody = document.getElementById("intermediateBody");
+      tbody.innerHTML = intermediate.map(row => `
+        <tr class="hover:bg-[var(--border)]/30 transition">
+          <td class="py-1.5 font-semibold text-blue-500">${row.address.toString(16).toUpperCase().padStart(4, "0")}</td>
+          <td class="py-1.5">${row.label || "-"}</td>
+          <td class="py-1.5 font-bold">${row.opcode}</td>
+          <td class="py-1.5 text-[var(--muted-foreground)]">${row.operand}</td>
+          <td class="py-1.5 text-emerald-500">${row.nextLocctr.toString(16).toUpperCase().padStart(4, "0")}</td>
+        </tr>
+      `).join("");
+
+      renderSymtab();
+    }
+
+    function renderSymtab() {
+      const tbody = document.getElementById("symtabBody");
+      const keys = Object.keys(symtab);
+      if (keys.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="3" class="py-3 text-center text-[var(--muted-foreground)]">SYMTAB is empty</td></tr>`;
+        return;
+      }
+      tbody.innerHTML = keys.map(sym => `
+        <tr class="hover:bg-[var(--border)]/30 transition">
+          <td class="py-1.5 font-bold text-blue-500">${sym}</td>
+          <td class="py-1.5 font-semibold">${symtab[sym].toString(16).toUpperCase().padStart(4, "0")}</td>
+          <td class="py-1.5 text-[var(--muted-foreground)]">${symtab[sym]}</td>
+        </tr>
+      `).join("");
+    }
+
+    function stepPass2() {
+      if (!p1Done) {
+        alert("Please complete Pass 1 first before running Pass 2!");
+        return;
+      }
+      if (p2Done) {
+        alert("Pass 2 is already complete!");
+        return;
+      }
+
+      const item = intermediate[p2Index];
+      let obj = "";
+      let targetAddr = "--";
+      let machOp = "--";
+
+      if (OPTAB[item.opcode]) {
+        machOp = OPTAB[item.opcode];
+        if (item.opcode === "RSUB") {
+          targetAddr = "0000";
+          obj = machOp + "0000";
+        } else {
+          let op = item.operand;
+          let indexed = false;
+          if (op.endsWith(",X") || op.includes(", X")) {
+            indexed = true;
+            op = op.replace(", X", "").replace(",X", "").trim();
+          }
+          if (symtab[op] !== undefined) {
+            let addr = symtab[op];
+            if (indexed) addr += 0x8000;
+            targetAddr = addr.toString(16).toUpperCase().padStart(4, "0");
+            obj = machOp + targetAddr;
+          } else {
+            obj = "ERROR";
+          }
+        }
+      } else if (item.opcode === "WORD") {
+        machOp = "WORD";
+        const val = parseInt(item.operand);
+        // 24-bit 2's complement for negatives
+        obj = (val & 0xFFFFFF).toString(16).toUpperCase().padStart(6, "0");
+        targetAddr = item.operand;
+      } else if (item.opcode === "BYTE") {
+        machOp = "BYTE";
+        if (item.operand.startsWith("C'")) {
+          const chars = item.operand.slice(2, -1);
+          obj = Array.from(chars).map(c => c.charCodeAt(0).toString(16).toUpperCase().padStart(2, "0")).join("");
+        } else if (item.operand.startsWith("X'")) {
+          obj = item.operand.slice(2, -1).toUpperCase();
+        }
+      }
+
+      objectCodes.push({
+        address: item.address,
+        source: item.source,
+        machOp: machOp,
+        targetAddr: targetAddr,
+        objectCode: obj
+      });
+
+      p2Index++;
+      updatePass2UI();
+
+      if (p2Index >= intermediate.length) {
+        p2Done = true;
+        document.getElementById("metricStatus").innerHTML = `<span class="w-2 h-2 rounded-full bg-emerald-500 inline-block"></span> Assembly Completed`;
+        document.getElementById("metricStatus").className = "text-sm font-bold text-emerald-500 mt-1.5 flex items-center gap-1.5";
+        buildHTERecords();
+      }
+    }
+
+    function updatePass2UI() {
+      document.getElementById("pass2Progress").innerText = `Instruction ${p2Index} / ${intermediate.length}`;
+      const tbody = document.getElementById("objectCodeBody");
+      tbody.innerHTML = objectCodes.map(row => `
+        <tr class="hover:bg-[var(--border)]/30 transition">
+          <td class="py-1.5 text-[var(--muted-foreground)]">${row.address.toString(16).toUpperCase().padStart(4, "0")}</td>
+          <td class="py-1.5 font-mono-code">${row.source}</td>
+          <td class="py-1.5 text-blue-500">${row.machOp}</td>
+          <td class="py-1.5 text-amber-500">${row.targetAddr}</td>
+          <td class="py-1.5 font-bold ${row.objectCode ? 'text-emerald-500' : 'text-[var(--muted-foreground)]'}">
+            ${row.objectCode || "--"}
+          </td>
+        </tr>
+      `).join("");
+    }
+
+    function buildHTERecords() {
+      const progName = intermediate[0].label || "COUNT";
+      const paddedName = (progName + "      ").slice(0, 6);
+      const startHex = startAddress.toString(16).toUpperCase().padStart(6, "0");
+      const lenHex = programLength.toString(16).toUpperCase().padStart(6, "0");
+
+      document.getElementById("hteHeader").innerText = `H^${paddedName}^${startHex}^${lenHex}`;
+      document.getElementById("hteEnd").innerText = `E^${startHex}`;
+
+      const tRecords = [];
+      let currentStart = null;
+      let currentBytes = [];
+      let currentLen = 0;
+
+      for (const item of objectCodes) {
+        const code = item.objectCode;
+        const addr = item.address;
+
+        if (!code) {
+          if (currentBytes.length > 0) {
+            const rLenHex = currentLen.toString(16).toUpperCase().padStart(2, "0");
+            const rStartHex = currentStart.toString(16).toUpperCase().padStart(6, "0");
+            tRecords.push(`T^${rStartHex}^${rLenHex}^${currentBytes.join("")}`);
+            currentStart = null;
+            currentBytes = [];
+            currentLen = 0;
+          }
+          continue;
+        }
+
+        const bLen = code.length / 2;
+        if (currentStart === null) {
+          currentStart = addr;
+          currentBytes = [code];
+          currentLen = bLen;
+        } else if (currentLen + bLen > 30) {
+          const rLenHex = currentLen.toString(16).toUpperCase().padStart(2, "0");
+          const rStartHex = currentStart.toString(16).toUpperCase().padStart(6, "0");
+          tRecords.push(`T^${rStartHex}^${rLenHex}^${currentBytes.join("")}`);
+          currentStart = addr;
+          currentBytes = [code];
+          currentLen = bLen;
+        } else {
+          currentBytes.push(code);
+          currentLen += bLen;
+        }
+      }
+
+      if (currentBytes.length > 0) {
+        const rLenHex = currentLen.toString(16).toUpperCase().padStart(2, "0");
+        const rStartHex = currentStart.toString(16).toUpperCase().padStart(6, "0");
+        tRecords.push(`T^${rStartHex}^${rLenHex}^${currentBytes.join("")}`);
+      }
+
+      document.getElementById("hteText").innerHTML = tRecords.map(tr => `<div>${tr}</div>`).join("");
+    }
+
+    function runFullAssembly() {
+      initSource();
+      while (!p1Done) {
+        stepPass1();
+      }
+      while (!p2Done) {
+        stepPass2();
+      }
+      switchTab('tabObjectCode');
+    }
+
+    function resetSimulation() {
+      initSource();
+      document.getElementById("metricLocctr").innerText = "9000 H";
+      document.getElementById("metricProgLen").innerText = "003F H (63 B)";
+      document.getElementById("metricStatus").innerHTML = `<span class="w-2 h-2 rounded-full bg-amber-500 inline-block"></span> Reset`;
+      document.getElementById("metricStatus").className = "text-sm font-bold text-amber-500 mt-1.5 flex items-center gap-1.5";
+      document.getElementById("intermediateBody").innerHTML = `<tr><td colspan="5" class="py-6 text-center text-[var(--muted-foreground)]">Click "Step Pass 1" or "Run Complete Simulation"</td></tr>`;
+      document.getElementById("objectCodeBody").innerHTML = `<tr><td colspan="5" class="py-6 text-center text-[var(--muted-foreground)]">Pass 2 requires Pass 1 to finish.</td></tr>`;
+      document.getElementById("symtabBody").innerHTML = `<tr><td colspan="3" class="py-3 text-center text-[var(--muted-foreground)]">Run Pass 1 to build SYMTAB</td></tr>`;
+      document.getElementById("pass1Progress").innerText = "Pending";
+      document.getElementById("pass2Progress").innerText = "Pending";
+    }
+
+    function switchTab(tabId) {
+      const tabs = ["tabIntermediate", "tabObjectCode", "tabHTE", "tabTwosComp"];
+      tabs.forEach(t => {
+        document.getElementById(t).classList.add("hidden");
+        const btn = document.getElementById("btn" + t.charAt(0).toUpperCase() + t.slice(1));
+        if (btn) {
+          btn.className = "py-2 px-3 border-b-2 border-transparent text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition";
+        }
+      });
+      document.getElementById(tabId).classList.remove("hidden");
+      const activeBtn = document.getElementById("btn" + tabId.charAt(0).toUpperCase() + tabId.slice(1));
+      if (activeBtn) {
+        activeBtn.className = "py-2 px-3 border-b-2 border-blue-500 text-blue-500 font-semibold transition";
+      }
+    }
+
+    function copyHTE() {
+      const h = document.getElementById("hteHeader").innerText;
+      const t = Array.from(document.getElementById("hteText").children).map(c => c.innerText).join("\n");
+      const e = document.getElementById("hteEnd").innerText;
+      const full = `${h}\n${t}\n${e}`;
+      navigator.clipboard.writeText(full).then(() => {
+        alert("Object program copied to clipboard!");
+      });
+    }
+
+    function loadSampleProgram() {
+      document.getElementById("srcEditor").value = `COUNT   START   9000
+        LDX     ZERO
+        LDA     ZERO
+        STA     COUNT1
+LOOP    LDA     TABLE
+        COMP    ZERO
+        JLT     NEXT
+        LDA     COUNT1
+        ADD     ONE
+        STA     COUNT1
+NEXT    TIX     FIVE
+        JLT     LOOP
+        RSUB
+TABLE   WORD    10
+        WORD    -5
+        WORD    20
+        WORD    -2
+        WORD    15
+COUNT1  RESW    1
+ZERO    WORD    0
+ONE     WORD    1
+FIVE    WORD    5
+        END     COUNT`;
+      resetSimulation();
+    }
+
+    // Auto-run on mount
+    window.addEventListener("DOMContentLoaded", () => {
+      runFullAssembly();
+      switchTab('tabIntermediate');
+    });
+  </script>
+</body>
+</html>

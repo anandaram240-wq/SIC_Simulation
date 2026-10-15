@@ -943,7 +943,13 @@ class TwoPassAssemblerGUI:
 
             else:
 
-                if operand not in self.symbol_table:
+                indexed = False
+                clean_op = operand
+                if operand.endswith(",X") or ", X" in operand:
+                    indexed = True
+                    clean_op = operand.replace(", X", "").replace(",X", "").strip()
+
+                if clean_op not in self.symbol_table:
 
                     messagebox.showerror(
                         "Assembler Error",
@@ -957,9 +963,12 @@ class TwoPassAssemblerGUI:
 
                 operand_address = (
                     self.symbol_table[
-                        operand
+                        clean_op
                     ]
                 )
+
+                if indexed:
+                    operand_address += 0x8000
 
                 object_code = (
                     machine_opcode +
@@ -978,7 +987,7 @@ class TwoPassAssemblerGUI:
             value = int(operand)
 
             object_code = format(
-                value,
+                value & 0xFFFFFF,
                 "06X"
             )
 
